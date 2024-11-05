@@ -95,7 +95,7 @@ def test_get_short_book_title() -> None:
 
 
 def test_get_scripture_passage_null() -> None:
-    assert not DEFAULT_PARSER.get_scripture_passage_text(None)
+    assert not DEFAULT_PARSER.get_scripture_passage_text(None)  # type: ignore[arg-type]
 
 
 def test_get_verse_text(verse_id: int, verse_text: str) -> None:
@@ -112,7 +112,7 @@ def test_get_verse_text_null() -> None:
     # When we attempt to get the scripture text for that verse id
     # Then it raise an InvalidVerseError
     with pytest.raises(bible.InvalidVerseError):
-        DEFAULT_PARSER.verse_text(None)
+        DEFAULT_PARSER.verse_text(None)  # type: ignore[arg-type]
 
 
 def test_get_verse_text_invalid_verse(invalid_verse_id: int) -> None:

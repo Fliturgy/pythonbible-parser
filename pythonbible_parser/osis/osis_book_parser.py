@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from pythonbible import get_book_chapter_verse
 from pythonbible import get_verse_id
 
 from pythonbible_parser.osis.osis_utilities import get_element_tail
@@ -18,9 +19,50 @@ HTML_NEWLINE = "<br/>"
 
 PLAIN_NEWLINE = "\n"
 
+OPEN_BRACKET = "["
+CLOSE_BRACKET = "]"
+
 
 class OSISBookParser:
     """OSISBookParser parses an OSIS XML file for a specific book of the Bible."""
+
+    root: Any
+    html_offset: int
+    html_readers_offset: int
+    html_notes_offset: int
+    plain_text_offset: int
+    plain_text_readers_offset: int
+    plain_text_notes_offset: int
+
+    title: str
+    short_title: str
+
+    html: str
+    html_readers: str
+    html_notes: str
+    plain_text: str
+    plain_text_readers: str
+    plain_text_notes: str
+
+    html_verse_start_indices: dict[int, int]
+    html_readers_verse_start_indices: dict[int, int]
+    html_notes_verse_start_indices: dict[int, int]
+    plain_text_verse_start_indices: dict[int, int]
+    plain_text_readers_verse_start_indices: dict[int, int]
+    plain_text_notes_verse_start_indices: dict[int, int]
+
+    html_verse_end_indices: dict[int, int]
+    html_readers_verse_end_indices: dict[int, int]
+    html_notes_verse_end_indices: dict[int, int]
+    plain_text_verse_end_indices: dict[int, int]
+    plain_text_readers_verse_end_indices: dict[int, int]
+    plain_text_notes_verse_end_indices: dict[int, int]
+
+    max_verses: dict[int, int]
+
+    current_verse: int
+
+    unknown_tags: set[str]
 
     def __init__(
         self: OSISBookParser,
@@ -33,41 +75,43 @@ class OSISBookParser:
         plain_text_notes_offset: int,
     ) -> None:
         """Initialize the OSISBookParser."""
-        self.root: Any = root
-        self.html_offset: int = html_offset
-        self.html_readers_offset: int = html_readers_offset
-        self.html_notes_offset: int = html_notes_offset
-        self.plain_text_offset: int = plain_text_offset
-        self.plain_text_readers_offset: int = plain_text_readers_offset
-        self.plain_text_notes_offset: int = plain_text_notes_offset
+        self.root = root
+        self.html_offset = html_offset
+        self.html_readers_offset = html_readers_offset
+        self.html_notes_offset = html_notes_offset
+        self.plain_text_offset = plain_text_offset
+        self.plain_text_readers_offset = plain_text_readers_offset
+        self.plain_text_notes_offset = plain_text_notes_offset
 
-        self.title: str = self.root.text or ""
-        self.short_title: str = self.root.get("short") or ""
+        self.title = self.root.text or ""
+        self.short_title = self.root.get("short") or ""
 
-        self.html: str = ""
-        self.html_readers: str = ""
-        self.html_notes: str = ""
-        self.plain_text: str = ""
-        self.plain_text_readers: str = ""
-        self.plain_text_notes: str = ""
+        self.html = ""
+        self.html_readers = ""
+        self.html_notes = ""
+        self.plain_text = ""
+        self.plain_text_readers = ""
+        self.plain_text_notes = ""
 
-        self.html_verse_start_indices: dict[int, int] = {}
-        self.html_readers_verse_start_indices: dict[int, int] = {}
-        self.html_notes_verse_start_indices: dict[int, int] = {}
-        self.plain_text_verse_start_indices: dict[int, int] = {}
-        self.plain_text_readers_verse_start_indices: dict[int, int] = {}
-        self.plain_text_notes_verse_start_indices: dict[int, int] = {}
+        self.html_verse_start_indices = {}
+        self.html_readers_verse_start_indices = {}
+        self.html_notes_verse_start_indices = {}
+        self.plain_text_verse_start_indices = {}
+        self.plain_text_readers_verse_start_indices = {}
+        self.plain_text_notes_verse_start_indices = {}
 
-        self.html_verse_end_indices: dict[int, int] = {}
-        self.html_readers_verse_end_indices: dict[int, int] = {}
-        self.html_notes_verse_end_indices: dict[int, int] = {}
-        self.plain_text_verse_end_indices: dict[int, int] = {}
-        self.plain_text_readers_verse_end_indices: dict[int, int] = {}
-        self.plain_text_notes_verse_end_indices: dict[int, int] = {}
+        self.html_verse_end_indices = {}
+        self.html_readers_verse_end_indices = {}
+        self.html_notes_verse_end_indices = {}
+        self.plain_text_verse_end_indices = {}
+        self.plain_text_readers_verse_end_indices = {}
+        self.plain_text_notes_verse_end_indices = {}
 
-        self.current_verse: int = 0
+        self.max_verses = {}
 
-        self.unknown_tags: set[str] = set()
+        self.current_verse = 0
+
+        self.unknown_tags = set()
 
     def parse(self: OSISBookParser) -> None:
         self._process_element(self.root)
@@ -81,7 +125,7 @@ class OSISBookParser:
         tag: str = strip_namespace_from_tag(element.tag)
 
         self._handle_paragraph(element, tag)
-        self._handle_chapter(tag)
+        self._handle_chapter(element, tag)
         self._handle_title(element, tag)
         self._handle_verse(element, tag, in_notes)
         self._handle_q(element, tag, in_notes)
@@ -113,12 +157,15 @@ class OSISBookParser:
         self.html_readers += HTML_P_CLOSE
         self.html_notes += HTML_P_CLOSE
 
-    def _handle_chapter(self: OSISBookParser, tag: str) -> None:
+    def _handle_chapter(self: OSISBookParser, element: Any, tag: str) -> None:
         if tag != "chapter":
             return
 
         self._set_verse_end_indices()
         self.current_verse = 0
+
+        # Some OSIS files have verses within the chapter, some have them outside.
+        self._process_children(element)
 
     def _handle_title(self: OSISBookParser, element: Any, tag: str) -> None:
         if tag != "title":
@@ -139,7 +186,6 @@ class OSISBookParser:
         if tag != "verse":
             return
 
-        self._append_text(get_element_text(element), in_notes)
         osis_id_str = element.get("osisID")
 
         if osis_id_str is None:
@@ -152,6 +198,7 @@ class OSISBookParser:
         self.current_verse = get_verse_id(osis_id.book, osis_id.chapter, osis_id.verse)
 
         self._set_verse_start_indices()
+        self._update_max_verses()
 
         if (
             self.html
@@ -180,7 +227,10 @@ class OSISBookParser:
             self.plain_text_notes += " "
 
         self.plain_text_notes += f"{osis_id.verse}."
+        self._append_text(get_element_text(element).replace("\\", "\\\\"), in_notes)
         self._append_text(get_element_tail(element), in_notes)
+
+        self._process_children(element, in_notes)
 
     def _handle_q(self: OSISBookParser, element: Any, tag: str, in_notes: bool) -> None:
         if tag != "q":
@@ -208,15 +258,28 @@ class OSISBookParser:
         tag: str,
         in_notes: bool,
     ) -> None:
-        if tag in {"div", "lg", "l", "list", "item", "divineName", "note"}:
-            # TODO - figure out poetical material formatting
-            # TODO - figure out list formatting
-            # TODO - figure out item formatting
-            self._process_children(element, in_notes or tag == "note")
+        if tag in {"div", "lg", "l", "list", "item", "divineName"}:
+            # TODO - figure out how to properly format these
+            self._append_text(get_element_text(element), in_notes)
+            self._process_children(element, in_notes)
+            self._append_text(get_element_tail(element), in_notes)
             return
 
-        if tag in {"w", "transChange"}:
+        if tag == "note":
+            self._append_text(get_element_tail(element), in_notes)
+            self._process_children(element, True)
+            return
+
+        if tag == "w":
             self._append_text(get_element_text_and_tail(element), in_notes)
+            return
+
+        if tag == "transChange":
+            self._append_text(OPEN_BRACKET)
+            self._append_text(get_element_text(element).lstrip(), in_notes)
+            self._process_children(element, in_notes)
+            self._append_text(CLOSE_BRACKET)
+            self._append_text(get_element_tail(element), in_notes)
             return
 
         if tag == "lb":
@@ -243,6 +306,7 @@ class OSISBookParser:
                     self.html
                     and not self.html.endswith(HTML_NEWLINE)
                     and not self.html.endswith(HTML_P_CLOSE)
+                    and not self.html.endswith(OPEN_BRACKET)
                 ):
                     self.html += " "
 
@@ -250,14 +314,21 @@ class OSISBookParser:
                     self.html_readers
                     and not self.html_readers.endswith(HTML_NEWLINE)
                     and not self.html_readers.endswith(HTML_P_CLOSE)
+                    and not self.html_readers.endswith(OPEN_BRACKET)
                 ):
                     self.html_readers += " "
 
-                if self.plain_text and not self.plain_text.endswith(PLAIN_NEWLINE):
+                if (
+                    self.plain_text
+                    and not self.plain_text.endswith(PLAIN_NEWLINE)
+                    and not self.plain_text.endswith(OPEN_BRACKET)
+                ):
                     self.plain_text += " "
 
-                if self.plain_text_readers and not self.plain_text_readers.endswith(
-                    PLAIN_NEWLINE,
+                if (
+                    self.plain_text_readers
+                    and not self.plain_text_readers.endswith(PLAIN_NEWLINE)
+                    and not self.plain_text_readers.endswith(OPEN_BRACKET)
                 ):
                     self.plain_text_readers += " "
 
@@ -265,13 +336,18 @@ class OSISBookParser:
                 self.html_notes
                 and not self.html_notes.endswith(HTML_NEWLINE)
                 and not self.html_notes.endswith(HTML_P_CLOSE)
+                and not self.html_notes.endswith(OPEN_BRACKET)
             ):
                 self.html_notes += " "
 
-            if self.plain_text_notes and not self.plain_text_notes.endswith(
-                PLAIN_NEWLINE,
+            if (
+                self.plain_text_notes
+                and not self.plain_text_notes.endswith(PLAIN_NEWLINE)
+                and not self.plain_text_notes.endswith(OPEN_BRACKET)
             ):
                 self.plain_text_notes += " "
+        elif text == OPEN_BRACKET:
+            text = f" {text}"
 
         if not in_notes:
             self.html += text
@@ -322,3 +398,7 @@ class OSISBookParser:
         self.plain_text_notes_verse_start_indices[self.current_verse] = (
             len(self.plain_text_notes) + self.plain_text_notes_offset
         )
+
+    def _update_max_verses(self: OSISBookParser) -> None:
+        _, chapter, verse = get_book_chapter_verse(self.current_verse)
+        self.max_verses[chapter] = max(verse, self.max_verses.get(chapter, 0))

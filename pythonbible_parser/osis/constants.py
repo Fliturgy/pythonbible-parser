@@ -5,7 +5,7 @@ from types import MappingProxyType
 import pythonbible as bible
 
 # noinspection SpellCheckingInspection
-BOOK_IDS: dict[bible.Book, str] = MappingProxyType(
+BOOK_IDS: MappingProxyType[bible.Book, str] = MappingProxyType(
     {
         bible.Book.GENESIS: "Gen",
         bible.Book.EXODUS: "Exod",

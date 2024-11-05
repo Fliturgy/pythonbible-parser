@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import ast
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -25,7 +25,7 @@ from pythonbible_parser.osis.osis_utilities import get_namespace
 from pythonbible_parser.osis.osis_utilities import parse_osis_id
 from pythonbible_parser.osis.osis_utilities import strip_namespace_from_tag
 
-XML_FOLDER: str = Path(Path(os.path.realpath(__file__)).parent / "versions")
+XML_FOLDER: Path = Path(__file__).parent / "versions"
 
 XPATH_BOOK: str = ".//xmlns:div[@osisID='{}']"
 XPATH_BOOK_TITLE: str = f"{XPATH_BOOK}/xmlns:title"
@@ -51,7 +51,7 @@ class OldOSISParser(BibleParser):
         super().__init__(version)
 
         self.tree: ElementTree = ElementTree.parse(
-            Path(XML_FOLDER / f"{self.version.value.lower()}.xml"),
+            XML_FOLDER / f"{self.version.value.lower()}.xml",
         )
         self.namespaces: dict[str, str] = {
             "xmlns": get_namespace(self.tree.getroot().tag),
@@ -103,7 +103,9 @@ class OldOSISParser(BibleParser):
         verse_ids_tuple: tuple[int, ...] = tuple(verse_ids)
 
         # keyword arguments
-        include_verse_number: bool = kwargs.get("include_verse_number", True)
+        include_verse_number: bool = ast.literal_eval(
+            str(kwargs.get("include_verse_number", True))
+        )
 
         return self._get_scripture_passage_text_memoized(
             verse_ids_tuple,
@@ -131,7 +133,9 @@ class OldOSISParser(BibleParser):
             raise InvalidVerseError(msg)
 
         # keyword arguments
-        include_verse_number: bool = kwargs.get("include_verse_number", True)
+        include_verse_number: bool = ast.literal_eval(
+            str(kwargs.get("include_verse_number", True))
+        )
 
         return self._get_verse_text_memoized(verse_id, include_verse_number)
 

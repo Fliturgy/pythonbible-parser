@@ -19,12 +19,14 @@ class BibleParser:
     parsers (e.g. OSIS, USFM, USFX, etc.) for parsing scripture text.
     """
 
+    version: Version
+
     def __init__(self: BibleParser, version: Version) -> None:
         """Initialize the Bible parser with the version.
 
         :param version:
         """
-        self.version: Version = version
+        self.version = version
 
     @abstractmethod
     def get_book_title(self: BibleParser, book: Book) -> str:

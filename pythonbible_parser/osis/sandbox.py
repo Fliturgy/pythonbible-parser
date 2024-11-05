@@ -8,7 +8,7 @@ tags: set[str] = set()
 current_tag: str = ""
 in_tag: bool = False
 
-file_path = Path("versions" / "asv.xml")
+file_path = Path(__file__).parent / "versions" / "asv.xml"
 
 with file_path.open(encoding="utf-8") as reader:
     while True:

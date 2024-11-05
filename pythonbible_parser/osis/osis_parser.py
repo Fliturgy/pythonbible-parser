@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
@@ -15,10 +14,9 @@ from pythonbible_parser.osis.constants import BOOK_IDS
 from pythonbible_parser.osis.osis_book_parser import OSISBookParser
 from pythonbible_parser.osis.osis_utilities import get_namespace
 
-CURRENT_FOLDER: str = os.path.realpath(__file__)
-CURRENT_FOLDER_NAME: str = Path(CURRENT_FOLDER).parent
-INPUT_FOLDER: str = Path(CURRENT_FOLDER_NAME / "versions")
-OUTPUT_FOLDER: str = Path(CURRENT_FOLDER_NAME / "output")
+CURRENT_FOLDER: Path = Path(__file__).parent
+INPUT_FOLDER: Path = CURRENT_FOLDER / "versions"
+OUTPUT_FOLDER: Path = CURRENT_FOLDER / "output"
 
 XPATH_BOOK: str = ".//xmlns:div[@osisID='{}']"
 
@@ -30,7 +28,39 @@ class OSISParser:
     to parse XML files that are in the OSIS format.
     """
 
-    def __init__(self: OSISParser, version: bible.Version) -> None:
+    version: bible.Version
+
+    html: str
+    html_readers: str
+    html_notes: str
+    plain_text: str
+    plain_text_readers: str
+    plain_text_notes: str
+
+    html_verse_start_indices: dict[int, int]
+    html_readers_verse_start_indices: dict[int, int]
+    html_notes_verse_start_indices: dict[int, int]
+    plain_text_verse_start_indices: dict[int, int]
+    plain_text_readers_verse_start_indices: dict[int, int]
+    plain_text_notes_verse_start_indices: dict[int, int]
+
+    html_verse_end_indices: dict[int, int]
+    html_readers_verse_end_indices: dict[int, int]
+    html_notes_verse_end_indices: dict[int, int]
+    plain_text_verse_end_indices: dict[int, int]
+    plain_text_readers_verse_end_indices: dict[int, int]
+    plain_text_notes_verse_end_indices: dict[int, int]
+
+    short_titles: dict[bible.Book, str]
+    long_titles: dict[bible.Book, str]
+
+    max_verses: dict[bible.Book, dict[int, int]]
+
+    def __init__(
+        self: OSISParser,
+        version: bible.Version,
+        osis_file: Path | None = None,
+    ) -> None:
         """Initialize the OSIS parser.
 
         Set the version, the element tree from the appropriate version XML file,
@@ -38,38 +68,41 @@ class OSISParser:
 
         :param version:
         """
-        self.version: bible.Version = version
+        self.version = version
 
-        self.tree: ElementTree = ElementTree.parse(
-            Path(INPUT_FOLDER / f"{version.value.lower()}.xml"),
-        )
+        if not osis_file:
+            osis_file = INPUT_FOLDER / f"{version.value.lower()}.xml"
+
+        self.tree: ElementTree = ElementTree.parse(osis_file.resolve())
         self.namespaces: dict[str, str] = {
             "xmlns": get_namespace(self.tree.getroot().tag),
         }
 
-        self.html: str = ""
-        self.html_readers: str = ""
-        self.html_notes: str = ""
-        self.plain_text: str = ""
-        self.plain_text_readers: str = ""
-        self.plain_text_notes: str = ""
+        self.html = ""
+        self.html_readers = ""
+        self.html_notes = ""
+        self.plain_text = ""
+        self.plain_text_readers = ""
+        self.plain_text_notes = ""
 
-        self.html_verse_start_indices: dict[int, int] = {}
-        self.html_readers_verse_start_indices: dict[int, int] = {}
-        self.html_notes_verse_start_indices: dict[int, int] = {}
-        self.plain_text_verse_start_indices: dict[int, int] = {}
-        self.plain_text_readers_verse_start_indices: dict[int, int] = {}
-        self.plain_text_notes_verse_start_indices: dict[int, int] = {}
+        self.html_verse_start_indices = {}
+        self.html_readers_verse_start_indices = {}
+        self.html_notes_verse_start_indices = {}
+        self.plain_text_verse_start_indices = {}
+        self.plain_text_readers_verse_start_indices = {}
+        self.plain_text_notes_verse_start_indices = {}
 
-        self.html_verse_end_indices: dict[int, int] = {}
-        self.html_readers_verse_end_indices: dict[int, int] = {}
-        self.html_notes_verse_end_indices: dict[int, int] = {}
-        self.plain_text_verse_end_indices: dict[int, int] = {}
-        self.plain_text_readers_verse_end_indices: dict[int, int] = {}
-        self.plain_text_notes_verse_end_indices: dict[int, int] = {}
+        self.html_verse_end_indices = {}
+        self.html_readers_verse_end_indices = {}
+        self.html_notes_verse_end_indices = {}
+        self.plain_text_verse_end_indices = {}
+        self.plain_text_readers_verse_end_indices = {}
+        self.plain_text_notes_verse_end_indices = {}
 
-        self.short_titles: dict[bible.Book, str] = {}
-        self.long_titles: dict[bible.Book, str] = {}
+        self.short_titles = {}
+        self.long_titles = {}
+
+        self.max_verses = {}
 
     def parse(self: OSISParser) -> None:
         """Parse the XML input file."""
@@ -145,125 +178,85 @@ class OSISParser:
                 book_parser.plain_text_notes_verse_end_indices,
             )
 
-            self.short_titles[book] = book_parser.short_title
-            self.long_titles[book] = book_parser.title
+            self.short_titles[book] = book_parser.short_title or book.title
+            self.long_titles[book] = book_parser.title.strip() or book.title
 
-    def write(self: OSISParser) -> None:
+            self.max_verses[book] = book_parser.max_verses
+
+    def write(self: OSISParser, output_folder: Path = OUTPUT_FOLDER) -> None:
         """Write the content out to file(s)."""
         version_str: str = self.version.value.lower()
-        version_folder: str = Path(OUTPUT_FOLDER / version_str)
+        version_folder: Path = output_folder / version_str
 
-        for folder in (OUTPUT_FOLDER, version_folder):
+        for folder in (output_folder, version_folder):
             folder_path = Path(folder)
 
             if not folder_path.exists():
                 folder_path.mkdir()
 
-        _write_file(
+        _write_bible_file(
             version_folder,
-            "html.py",
+            "html_bible.py",
             self.version,
             self.html,
             self.html_verse_start_indices,
             self.html_verse_end_indices,
+            self.max_verses,
             True,
         )
-        _write_file(
+        _write_bible_file(
             version_folder,
-            "html_readers.py",
+            "html_readers_bible.py",
             self.version,
             self.html_readers,
             self.html_readers_verse_start_indices,
             self.html_readers_verse_end_indices,
+            self.max_verses,
             True,
         )
-        _write_file(
+        _write_bible_file(
             version_folder,
-            "html_notes.py",
+            "html_notes_bible.py",
             self.version,
             self.html_notes,
             self.html_notes_verse_start_indices,
             self.html_notes_verse_end_indices,
+            self.max_verses,
             True,
         )
-        _write_file(
+        _write_bible_file(
             version_folder,
-            "plain_text.py",
+            "plain_text_bible.py",
             self.version,
             self.plain_text,
             self.plain_text_verse_start_indices,
             self.plain_text_verse_end_indices,
+            self.max_verses,
         )
-        _write_file(
+        _write_bible_file(
             version_folder,
-            "plain_text_readers.py",
+            "plain_text_readers_bible.py",
             self.version,
             self.plain_text_readers,
             self.plain_text_readers_verse_start_indices,
             self.plain_text_readers_verse_end_indices,
+            self.max_verses,
         )
-        _write_file(
+        _write_bible_file(
             version_folder,
-            "plain_text_notes.py",
+            "plain_text_notes_bible.py",
             self.version,
             self.plain_text_notes,
             self.plain_text_notes_verse_start_indices,
             self.plain_text_notes_verse_end_indices,
+            self.max_verses,
         )
 
-        _write_titles_file(version_folder, self.short_titles, self.long_titles)
+        _write_init_file(version_folder, self.short_titles, self.long_titles)
 
     def _get_book_element(self: OSISParser, book: bible.Book) -> Any:
         xpath: str = XPATH_BOOK.format(BOOK_IDS.get(book))
         return self.tree.find(xpath, namespaces=self.namespaces)
-
-
-def _write_file(
-    folder: str,
-    filename: str,
-    version: bible.Version,
-    bible_text: str,
-    verse_start_indices: dict[int, int],
-    verse_end_indices: dict[int, int],
-    is_html: bool = False,
-) -> None:
-    file_path = Path(folder / filename)
-
-    with file_path.open(mode="w", encoding="utf-8") as writer:
-        writer.write(_file_header())
-        writer.write("from pythonbible.bible.bible import Bible\n")
-        writer.write("from pythonbible.versions import Version\n\n\n")
-        writer.write("bible = Bible(\n")
-        writer.write(f"    Version.{version.name},\n")
-        writer.write(f'    """{bible_text}""",\n')
-        writer.write(f"    {verse_start_indices},\n")
-        writer.write(f"    {verse_end_indices},\n")
-        writer.write(f"    {is_html},\n")
-        writer.write(")\n")
-
-
-def _write_titles_file(
-    folder: str,
-    short_titles: dict[bible.Book, str],
-    long_titles: dict[bible.Book, str],
-) -> None:
-    file_path = Path(folder / "titles.py")
-
-    with file_path.open(mode="w", encoding="utf-8") as writer:
-        writer.write(_file_header())
-        writer.write("from pythonbible.books import Book\n\n\n")
-        writer.write(f"short_titles = {_titles_dict_to_string(short_titles)}\n\n")
-        writer.write(f"long_titles = {_titles_dict_to_string(long_titles)}\n")
-
-
-def _titles_dict_to_string(titles: dict[bible.Book, str]) -> str:
-    return (
-        "{\n"
-        + ",\n".join(
-            [f"    Book.{book.name}: '{title}'" for book, title in titles.items()],
-        )
-        + ",\n}"
-    )
 
 
 def _file_header() -> str:
@@ -271,3 +264,84 @@ def _file_header() -> str:
         f"# This file was automatically generated by the pythonbible-parser package on "
         f"{datetime.now(timezone.utc)}.\n\n"
     )
+
+
+def _get_max_verses_string(max_verses: dict[bible.Book, dict[int, int]]) -> str:
+    max_verses_string = ",".join(
+        [f"Book.{book.name}: {chapters}" for book, chapters in max_verses.items()],
+    )
+    return f"{{{max_verses_string}}}"
+
+
+def _write_bible_file(
+    folder: Path,
+    filename: str,
+    version: bible.Version,
+    bible_text: str,
+    verse_start_indices: dict[int, int],
+    verse_end_indices: dict[int, int],
+    max_verses: dict[bible.Book, dict[int, int]],
+    is_html: bool = False,
+) -> None:
+    file_path = folder / filename
+
+    with file_path.open(mode="w", encoding="utf-8") as writer:
+        writer.write(_file_header())
+        writer.write("from pythonbible.bible.bible import Bible\n")
+        writer.write("from pythonbible.books import Book\n")
+        writer.write("from pythonbible.versions import Version\n\n\n")
+        writer.write("bible = Bible(\n")
+        writer.write(f"    Version.{version.name},\n")
+        writer.write(f'    """{bible_text}""",\n')
+        writer.write(f"    {verse_start_indices},\n")
+        writer.write(f"    {verse_end_indices},\n")
+        writer.write(f"    {_get_max_verses_string(max_verses)},\n")
+        writer.write(f"    {is_html},\n")
+        writer.write(")\n")
+
+
+BIBLES_CONTENT: str = """from pythonbible.versions import Version
+
+from . import html_bible
+from . import html_notes_bible
+from . import html_readers_bible
+from . import plain_text_bible
+from . import plain_text_notes_bible
+from . import plain_text_readers_bible
+
+
+BIBLES = {{
+    Version.{}: {{
+         \"html\": html_bible.bible,
+         \"html_notes\": html_notes_bible.bible,
+         \"html_readers\": html_readers_bible.bible,
+         \"plain_text\": plain_text_bible.bible,
+         \"plain_text_notes\": plain_text_notes_bible.bible,
+         \"plain_text_readers\": plain_text_readers_bible.bible,
+    }}
+}}
+"""
+
+
+def _titles_dict_to_string(titles: dict[bible.Book, str]) -> str:
+    return (
+        "{\n"
+        + ",\n".join(
+            [f'    Book.{book.name}: "{title}"' for book, title in titles.items()],
+        )
+        + ",\n}"
+    )
+
+
+def _write_init_file(
+    folder: Path,
+    short_titles: dict[bible.Book, str],
+    long_titles: dict[bible.Book, str],
+) -> None:
+    file_path = folder / "__init__.py"
+
+    with file_path.open(mode="w", encoding="utf-8") as writer:
+        writer.write(_file_header())
+        writer.write("from pythonbible.books import Book\n\n\n")
+        writer.write(f"SHORT_TITLES = {_titles_dict_to_string(short_titles)}\n\n")
+        writer.write(f"LONG_TITLES = {_titles_dict_to_string(long_titles)}\n")

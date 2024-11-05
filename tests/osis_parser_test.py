@@ -22,6 +22,7 @@ def get_plain_text_bible(version: bible.Version) -> bible.Bible:
         parser.plain_text,
         parser.plain_text_verse_start_indices,
         parser.plain_text_verse_end_indices,
+        parser.max_verses,
     )
 
 
@@ -33,6 +34,7 @@ def get_plain_text_readers_bible(version: bible.Version) -> bible.Bible:
         parser.plain_text_readers,
         parser.plain_text_readers_verse_start_indices,
         parser.plain_text_readers_verse_end_indices,
+        parser.max_verses,
     )
 
 
@@ -44,6 +46,7 @@ def get_plain_text_notes_bible(version: bible.Version) -> bible.Bible:
         parser.plain_text_notes,
         parser.plain_text_notes_verse_start_indices,
         parser.plain_text_notes_verse_end_indices,
+        parser.max_verses,
     )
 
 
@@ -55,6 +58,7 @@ def get_html_bible(version: bible.Version) -> bible.Bible:
         parser.html,
         parser.html_verse_start_indices,
         parser.html_verse_end_indices,
+        parser.max_verses,
         is_html=True,
     )
 
@@ -67,6 +71,7 @@ def get_html_readers_bible(version: bible.Version) -> bible.Bible:
         parser.html_readers,
         parser.html_readers_verse_start_indices,
         parser.html_readers_verse_end_indices,
+        parser.max_verses,
         is_html=True,
     )
 
@@ -79,6 +84,7 @@ def get_html_notes_bible(version: bible.Version) -> bible.Bible:
         parser.html_notes,
         parser.html_notes_verse_start_indices,
         parser.html_notes_verse_end_indices,
+        parser.max_verses,
         is_html=True,
     )
 
